@@ -1,0 +1,1532 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>My Town Builder</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Kosugi+Maru&family=Andika&display=swap" rel="stylesheet">
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Three.js (3Dミニゲーム用) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    
+    <style>
+        body {
+            font-family: 'Kosugi Maru', sans-serif;
+            background-color: #f0fdf4;
+            margin: 0;
+            overflow: hidden;
+            touch-action: none;
+        }
+
+        /* 全体レイアウト */
+        #app-container {
+            display: flex;
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden;
+        }
+
+        /* 左側パレット (新レイアウト) */
+        #left-sidebar {
+            width: 300px;
+            background-color: #ffffff;
+            border-right: 4px solid #3b82f6;
+            display: flex;
+            flex-direction: column;
+            z-index: 40;
+            flex-shrink: 0;
+            box-shadow: 4px 0 10px rgba(0,0,0,0.1);
+        }
+
+        /* 右側メインエリア */
+        #main-area {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        /* ツールバー */
+        #toolbar {
+            background-color: #ffffff;
+            border-bottom: 2px solid #e5e7eb;
+            padding: 10px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            z-index: 50;
+        }
+
+        .tool-btn {
+            padding: 8px 16px;
+            border-radius: 9999px;
+            border: 2px solid transparent;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* スクロール・ズーム可能なキャンバス領域 */
+        #scroll-container {
+            flex-grow: 1;
+            overflow: auto;
+            position: relative;
+            background-color: #dcfce7;
+            cursor: grab;
+        }
+        
+        #scroll-container:active {
+            cursor: grabbing;
+        }
+
+        /* 巨大なワールドコンテナ */
+        #world-container {
+            width: 4000px;
+            height: 4000px;
+            position: relative;
+            background-size: 120px 120px;
+            background-image: 
+                linear-gradient(to right, rgba(34, 197, 94, 0.2) 2px, transparent 2px),
+                linear-gradient(to bottom, rgba(34, 197, 94, 0.2) 2px, transparent 2px);
+            background-position: center center;
+            transform-origin: 0 0; /* ズームの基準点を左上に設定 */
+        }
+
+        /* アイテムグリッド */
+        #item-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            padding: 15px;
+            overflow-y: auto;
+            flex-grow: 1;
+        }
+
+        .item-card {
+            height: 100px;
+            border: 2px solid #e5e7eb;
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            background-color: white;
+        }
+
+        .item-card:hover {
+            border-color: #3b82f6;
+            background-color: #eff6ff;
+            transform: translateY(-2px);
+        }
+
+        .item-card.selected {
+            border-color: #3b82f6;
+            background-color: #eff6ff;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.4);
+            transform: scale(1.05);
+        }
+
+        .item-icon { font-size: 2.2rem; margin-bottom: 2px; }
+        .item-name { font-size: 0.75rem; font-weight: bold; text-align: center; word-break: break-word; }
+
+        .town-object {
+            position: absolute;
+            width: 100px;
+            height: 100px;
+            transform: translate(-50%, -50%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none;
+            z-index: 20;
+            animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .town-object-icon {
+            font-size: 3.5rem;
+            filter: drop-shadow(0 4px 3px rgba(0,0,0,0.3));
+        }
+
+        .town-object-label {
+            background-color: rgba(255, 255, 255, 0.95);
+            padding: 2px 8px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            border: 2px solid #94a3b8;
+            margin-top: -5px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .placement-slot {
+            position: absolute;
+            width: 110px;
+            height: 110px;
+            border: 4px dashed #3b82f6;
+            background-color: rgba(59, 130, 246, 0.15);
+            border-radius: 16px;
+            cursor: pointer;
+            transform: translate(-50%, -50%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 2.5rem;
+            color: #3b82f6;
+            transition: all 0.2s;
+            z-index: 10;
+        }
+
+        .placement-slot:hover {
+            background-color: rgba(59, 130, 246, 0.3);
+            transform: translate(-50%, -50%) scale(1.05);
+        }
+
+        @keyframes popIn {
+            0% { transform: translate(-50%, -50%) scale(0); }
+            100% { transform: translate(-50%, -50%) scale(1); }
+        }
+
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0, 0, 0, 0.6);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            backdrop-filter: blur(3px);
+        }
+
+        .modal-content {
+            background-color: white;
+            padding: 30px;
+            border-radius: 20px;
+            text-align: center;
+            max-width: 90%;
+            width: 450px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+            animation: slideDown 0.3s ease-out;
+            position: relative;
+        }
+
+        @keyframes slideDown {
+            from { transform: translateY(-30px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        .mic-btn {
+            width: 80px; height: 80px;
+            border-radius: 50%; background-color: #ef4444; color: white;
+            font-size: 2.5rem; border: none; cursor: pointer;
+            margin: 20px auto; display: flex; justify-content: center; align-items: center;
+            box-shadow: 0 6px 12px rgba(239, 68, 68, 0.4);
+            transition: all 0.2s;
+        }
+        .mic-btn:active { transform: scale(0.95); }
+        .mic-btn.listening { animation: pulse 1.5s infinite; }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+            70% { box-shadow: 0 0 0 15px rgba(239, 68, 68, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+
+        .toast {
+            position: fixed; top: 80px; left: 50%; transform: translateX(-50%);
+            background-color: rgba(31, 41, 55, 0.9); color: white;
+            padding: 12px 24px; border-radius: 9999px; font-weight: bold;
+            z-index: 200; transition: opacity 0.5s; pointer-events: none;
+        }
+
+        /* 3Dゲーム領域 */
+        #game-3d-container {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: #87CEEB; /* 空の色 */
+            display: none; z-index: 200;
+        }
+        
+        #game-ui {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; padding: 20px; box-sizing: border-box;
+            display: flex; flex-direction: column; justify-content: space-between;
+        }
+
+        /* モバイル用D-Pad */
+        #d-pad {
+            position: absolute; bottom: 30px; right: 30px;
+            width: 150px; height: 150px;
+            background: rgba(255,255,255,0.2); border-radius: 50%;
+            pointer-events: auto; display: flex; justify-content: center; align-items: center;
+        }
+        .d-btn {
+            position: absolute; width: 50px; height: 50px; background: rgba(0,0,0,0.3);
+            border-radius: 50%; color: white; display: flex; justify-content: center; align-items: center;
+            font-size: 24px; user-select: none;
+        }
+        .d-up { top: 0; } .d-down { bottom: 0; } .d-left { left: 0; } .d-right { right: 0; }
+
+        /* ノート機能のスタイル */
+        .font-note { 
+            font-family: 'Andika', sans-serif; 
+            font-size: 38px; 
+            letter-spacing: 0.05em; 
+        }
+
+        .four-lines-bg {
+            background-image: 
+                linear-gradient(transparent 34px, #4b5563 34px, #4b5563 36px, transparent 36px),
+                linear-gradient(transparent 45px, #4b5563 45px, #4b5563 47px, transparent 47px),
+                linear-gradient(transparent 62px, #dc2626 62px, #dc2626 64px, transparent 64px),
+                linear-gradient(transparent 72px, #4b5563 72px, #4b5563 74px, transparent 74px);
+            background-size: 100% 90px;
+            line-height: 90px;
+            padding-top: 3px; 
+            min-height: 90px;
+        }
+        
+        .custom-scrollbar::-webkit-scrollbar {
+            height: 12px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background-color: #cbd5e1;
+            border-radius: 6px;
+        }
+
+    </style>
+</head>
+<body>
+
+    <div id="app-container">
+        
+        <!-- 左側パレット -->
+        <div id="left-sidebar">
+            <div class="p-4 bg-blue-50 border-b border-blue-200">
+                <h2 class="font-bold text-blue-800 text-lg"><i class="fas fa-home"></i> 建物パレット</h2>
+                <p class="text-xs text-gray-600 mt-1">選んでから青い枠をクリック！</p>
+            </div>
+            <div id="item-grid">
+                <!-- JavaScriptでアイテム生成 -->
+            </div>
+        </div>
+
+        <!-- 右側メインエリア -->
+        <div id="main-area">
+            <!-- ツールバー -->
+            <div id="toolbar">
+                <div class="flex items-center gap-3">
+                    <span class="bg-blue-100 text-blue-800 text-sm font-bold px-3 py-1 rounded border border-blue-400">My Town Builder</span>
+                    <span id="rule-indicator" class="text-gray-600 font-bold hidden sm:inline">
+                        <i class="fas fa-info-circle text-blue-500"></i> <span id="rule-text">次は左右に置けるよ</span>
+                    </span>
+                    <span id="town-counter" class="ml-2 bg-yellow-100 text-yellow-800 text-xs font-bold px-2 py-1 rounded-full border border-yellow-400">
+                        建物: <span id="building-count">1</span>/10 (ミニゲームまで)
+                    </span>
+                </div>
+                
+                <div class="flex gap-2">
+                    <button id="btn-undo" class="tool-btn bg-gray-100 text-gray-700 hover:bg-gray-200 border-gray-300">
+                        <i class="fas fa-undo"></i> <span>もどる</span>
+                    </button>
+                    <button id="btn-new-town" class="tool-btn bg-red-100 text-red-600 hover:bg-red-200 border-red-300">
+                        <i class="fas fa-trash-alt"></i> <span>新しい町をつくる</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- メイン画面（パン＆ズーム・スクロール） -->
+            <div id="scroll-container">
+                <div id="world-container">
+                    <div id="slot-layer"></div>
+                    <div id="object-layer"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 音声認識モーダル -->
+    <div id="voice-modal" class="modal-overlay">
+        <div class="modal-content border-4 border-blue-400">
+            <h2 id="modal-title" class="text-2xl font-bold mb-4 text-gray-800">英語で言ってみよう！</h2>
+            <div id="kummani-image" class="text-7xl mb-2 hidden">🐻❓</div>
+            <div id="modal-icons" class="text-5xl mb-4 flex justify-center items-center gap-4"></div>
+            
+            <div class="flex justify-center items-center gap-3 mb-4 bg-gray-50 p-4 rounded-xl border border-gray-200">
+                <p id="modal-phrase" class="text-2xl font-bold text-gray-700 leading-relaxed"></p>
+                <button id="btn-play-sample" class="text-blue-500 hover:text-blue-700 bg-blue-100 hover:bg-blue-200 rounded-full min-w-[40px] h-10 flex items-center justify-center transition-colors">
+                    <i class="fas fa-volume-up"></i>
+                </button>
+            </div>
+            
+            <div id="voice-status" class="text-gray-600 mb-4 font-bold h-8 flex items-center justify-center">
+                マイクボタンを押して話してね
+            </div>
+            
+            <button id="mic-btn" class="mic-btn"><i class="fas fa-microphone"></i></button>
+            
+            <div class="flex justify-between items-center mt-6">
+                <button id="cancel-voice" class="text-gray-500 hover:text-gray-700 font-bold px-4 py-2 bg-gray-100 rounded-lg">やめる</button>
+                <div class="text-sm font-bold flex items-center gap-2">
+                    <span class="text-gray-400">失敗: </span>
+                    <span id="fail-count" class="text-red-500 text-xl">0</span>
+                    <span class="text-gray-400">/ 3</span>
+                </div>
+            </div>
+            <button id="skip-btn" class="w-full mt-4 py-3 bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold rounded-lg hidden transition-colors">
+                <i class="fas fa-forward"></i> スキップして進む
+            </button>
+        </div>
+    </div>
+
+    <!-- 3Dゲームコンテナ -->
+    <div id="game-3d-container">
+        <!-- Three.js Canvas goes here -->
+        <div id="game-ui">
+            <div class="flex justify-between w-full font-bold text-white text-2xl" style="text-shadow: 2px 2px 4px rgba(0,0,0,0.8);">
+                <div class="bg-blue-600 bg-opacity-70 px-4 py-2 rounded-full">
+                    残り時間: <span id="game-timer">20</span>秒
+                </div>
+                <div class="bg-yellow-500 bg-opacity-70 px-4 py-2 rounded-full">
+                    コイン: <span id="game-score">0</span>
+                </div>
+            </div>
+            <div class="text-center text-white font-bold text-xl mt-4 bg-black bg-opacity-50 inline-block px-4 py-1 rounded mx-auto" style="pointer-events: auto;">
+                WASD か 矢印キー でクッマーニ(🐻)を動かそう！
+            </div>
+            
+            <!-- モバイル用コントロール -->
+            <div id="d-pad" class="sm:hidden">
+                <div class="d-btn d-up" id="btn-up"><i class="fas fa-caret-up"></i></div>
+                <div class="d-btn d-down" id="btn-down"><i class="fas fa-caret-down"></i></div>
+                <div class="d-btn d-left" id="btn-left"><i class="fas fa-caret-left"></i></div>
+                <div class="d-btn d-right" id="btn-right"><i class="fas fa-caret-right"></i></div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- ノートモーダル -->
+    <div id="note-modal" class="modal-overlay" style="z-index: 250; background-color: rgba(254, 252, 232, 0.9);">
+        <div class="w-full max-w-5xl bg-white p-4 md:p-8 rounded-3xl shadow-xl border-4 border-yellow-300 mx-4 max-h-[90vh] overflow-y-auto">
+            <h2 class="text-3xl font-bold text-yellow-700 mb-6 text-center">📝 ノートに 書きうつそう！</h2>
+            <p class="text-center font-bold text-gray-600 mb-6">下の えいごを、じぶんの ノートに 書いてね。<br/>書きおわったら、次へ すすもう！</p>
+            
+            <div class="bg-white border-2 border-gray-300 p-2 md:p-8 rounded-xl shadow-inner mb-8 overflow-hidden bg-[url('https://www.transparenttextures.com/patterns/lined-paper-2.png')]">
+                <div id="note-content-area" class="text-left w-full overflow-x-auto pb-4 custom-scrollbar">
+                    <!-- JavaScriptでノート行を生成 -->
+                </div>
+            </div>
+            
+            <button id="btn-close-note" class="w-full bg-red-500 hover:bg-red-600 text-white text-xl font-bold py-5 rounded-2xl shadow-lg transition-colors">先生に見せました</button>
+        </div>
+    </div>
+
+    <!-- ガチャモーダル -->
+    <div id="gacha-modal" class="modal-overlay" style="z-index: 300;">
+        <div class="modal-content border-4 border-yellow-400 bg-gradient-to-b from-white to-yellow-50 w-[500px]">
+            <h2 class="text-3xl font-bold mb-2 text-yellow-600">おつかれさま！</h2>
+            <p class="text-lg font-bold text-gray-700 mb-4"><span id="result-coins" class="text-2xl text-yellow-500">0</span> 枚のコインを集めたよ！</p>
+            
+            <div class="bg-blue-50 border-2 border-blue-200 rounded-xl p-3 mb-4">
+                <p class="font-bold text-blue-800">コイン3枚でガチャが1回引けるよ！</p>
+                <p class="text-lg font-bold mt-1">のこりガチャ回数: <span id="gacha-count-display" class="text-2xl text-blue-600">0</span> 回</p>
+            </div>
+            
+            <div id="gacha-area" class="my-6">
+                <div id="gacha-box" class="text-8xl cursor-pointer animate-bounce">🎁</div>
+                <p class="text-sm text-gray-500 mt-2 font-bold">タップしてガチャを引く！</p>
+            </div>
+
+            <div id="gacha-result" class="hidden my-6">
+                <div class="text-2xl font-bold text-blue-600 mb-2">新しいなかまをゲット！</div>
+                <div id="gacha-character-icon" class="text-8xl filter drop-shadow-lg mb-2">✨</div>
+                <div id="gacha-character-name" class="text-xl font-bold text-gray-800 border-b-2 border-yellow-400 inline-block px-4">名前</div>
+                <p class="text-sm text-gray-600 mt-4">次のミニゲームからコイン集めを手伝ってくれるよ！</p>
+                
+                <button id="btn-draw-again" class="mt-6 w-full py-3 bg-yellow-500 hover:bg-yellow-600 text-white font-bold rounded-lg transition-colors shadow-md hidden">
+                    もう一回ガチャを引く
+                </button>
+            </div>
+            
+            <button id="btn-close-gacha" class="w-full mt-4 py-3 bg-gray-400 hover:bg-gray-500 text-white font-bold rounded-lg transition-colors shadow-md">
+                町づくりにもどる
+            </button>
+        </div>
+    </div>
+
+    <script>
+        const vocabulary = [
+            { word: "house", icon: "🏠", jp: "家" },
+            { word: "hospital", icon: "🏥", jp: "病院" },
+            { word: "school", icon: "🏫", jp: "学校" },
+            { word: "police station", icon: "🚓", jp: "警察署" },
+            { word: "fire station", icon: "🚒", jp: "消防署" },
+            { word: "post office", icon: "📮", jp: "郵便局" },
+            { word: "library", icon: "📚", jp: "図書館" },
+            { word: "museum", icon: "🏛️", jp: "博物館" },
+            { word: "park", icon: "🏞️", jp: "公園" },
+            { word: "station", icon: "🚉", jp: "駅" },
+            { word: "restaurant", icon: "🍽️", jp: "レストラン" },
+            { word: "supermarket", icon: "🛒", jp: "スーパー" },
+            { word: "convenience store", icon: "🏪", jp: "コンビニ" },
+            { word: "amusement park", icon: "🎡", jp: "遊園地" },
+            { word: "zoo", icon: "🐘", jp: "動物園" },
+            { word: "castle", icon: "🏯", jp: "お城" }
+        ];
+
+        const gachaCharactersList = [
+            { name: "勇者", icon: "⚔️" },
+            { name: "魔法使い", icon: "🧙‍♀️" },
+            { name: "ドラゴン", icon: "🐉" },
+            { name: "エルフ", icon: "🧝‍♀️" },
+            { name: "ペガサス", icon: "🦄" },
+            { name: "騎士", icon: "🛡️" },
+            { name: "妖精", icon: "🧚" }
+        ];
+
+        const GRID_SIZE = 120;
+        const CENTER_COORD = 2000;
+
+        const state = {
+            placedObjects: [],
+            selectedItem: null,
+            
+            // 音声関連
+            recognition: null,
+            voiceMode: null,
+            pendingPlacement: null,
+            kummaniData: null,
+            failCount: 0,
+            fakeListenTimeout: null,
+            recordedSentences: [], // 音声入力した文章を保存する配列
+
+            // ガチャ＆3Dゲーム・ノート関連
+            gachaCharacters: [], // 獲得済みキャラ
+            gameScore: 0,
+            isGameRunning: false,
+            hasShownNote: false, // 1回だけノートを表示するためのフラグ
+            gachaCount: 0 // 残りガチャ回数
+        };
+
+        const ui = {
+            scrollContainer: document.getElementById('scroll-container'),
+            worldContainer: document.getElementById('world-container'),
+            objectLayer: document.getElementById('object-layer'),
+            slotLayer: document.getElementById('slot-layer'),
+            itemGrid: document.getElementById('item-grid'),
+            ruleText: document.getElementById('rule-text'),
+            buildingCount: document.getElementById('building-count'),
+            
+            btnUndo: document.getElementById('btn-undo'),
+            btnNewTown: document.getElementById('btn-new-town'),
+            
+            voiceModal: document.getElementById('voice-modal'),
+            modalTitle: document.getElementById('modal-title'),
+            kummaniImage: document.getElementById('kummani-image'),
+            modalIcons: document.getElementById('modal-icons'),
+            modalPhrase: document.getElementById('modal-phrase'),
+            btnPlaySample: document.getElementById('btn-play-sample'),
+            voiceStatus: document.getElementById('voice-status'),
+            micBtn: document.getElementById('mic-btn'),
+            cancelVoice: document.getElementById('cancel-voice'),
+            skipBtn: document.getElementById('skip-btn'),
+            failCountDisplay: document.getElementById('fail-count')
+        };
+
+        function initApp() {
+            createPalette();
+            setupSpeechRecognition();
+            setupDrag();
+            setupEventListeners();
+            resetTown();
+        }
+
+        function resetTown() {
+            state.placedObjects = [];
+            state.selectedItem = null;
+            state.recordedSentences = [];
+            state.hasShownNote = false;
+            updatePaletteUI();
+            
+            renderObjects();
+            calculateSlots();
+            updateRuleIndicator();
+            
+            // 初期中央寄せ
+            setTimeout(centerCameraOnHouse, 100);
+            
+            showToast("新しい町がはじまるよ！左から「house」を選んで、好きな場所をクリックしてね。");
+        }
+
+        function createPalette() {
+            ui.itemGrid.innerHTML = '';
+            vocabulary.forEach(item => {
+                const card = document.createElement('div');
+                card.className = 'item-card';
+                card.dataset.word = item.word;
+                card.innerHTML = `
+                    <div class="item-icon">${item.icon}</div>
+                    <div class="item-name">${item.word}</div>
+                `;
+                card.addEventListener('click', () => selectItem(item));
+                ui.itemGrid.appendChild(card);
+            });
+        }
+
+        function selectItem(item) {
+            state.selectedItem = item;
+            updatePaletteUI();
+            calculateSlots();
+            
+            if (state.placedObjects.length === 0) {
+                showToast("マップ上の好きな場所をクリックして家を置こう！");
+            } else {
+                showToast("青い枠（＋）をクリックして建物を置こう！");
+            }
+        }
+
+        function updatePaletteUI() {
+            const cards = ui.itemGrid.querySelectorAll('.item-card');
+            cards.forEach(card => {
+                if (state.selectedItem && card.dataset.word === state.selectedItem.word) {
+                    card.classList.add('selected');
+                } else {
+                    card.classList.remove('selected');
+                }
+            });
+        }
+
+        function calculateSlots() {
+            ui.slotLayer.innerHTML = '';
+            if (!state.selectedItem) return;
+            
+            // 最初の1個目はマウスホバーで動的にスロットを出すためここでは生成しない
+            if (state.placedObjects.length === 0) {
+                return;
+            }
+
+            // 長さ1(奇数)なら左右、長さ2(偶数)なら上下
+            const isHorizontal = state.placedObjects.length % 2 === 1; 
+            const slotsData = [];
+            
+            state.placedObjects.forEach(obj => {
+                const neighbors = isHorizontal
+                    ? [{dx: -1, dy: 0, dir: 'horizontal'}, {dx: 1, dy: 0, dir: 'horizontal'}]
+                    : [{dx: 0, dy: -1, dir: 'vertical'}, {dx: 0, dy: 1, dir: 'vertical'}];
+                    
+                neighbors.forEach(n => {
+                    const nx = obj.gridX + n.dx;
+                    const ny = obj.gridY + n.dy;
+                    
+                    const isOccupied = state.placedObjects.some(o => o.gridX === nx && o.gridY === ny);
+                    if (!isOccupied && !slotsData.some(s => s.gridX === nx && s.gridY === ny)) {
+                        slotsData.push({ gridX: nx, gridY: ny, refObj: obj, direction: n.dir });
+                    }
+                });
+            });
+            
+            slotsData.forEach(slot => {
+                const div = document.createElement('div');
+                div.className = 'placement-slot';
+                div.style.left = `${CENTER_COORD + slot.gridX * GRID_SIZE}px`;
+                div.style.top = `${CENTER_COORD + slot.gridY * GRID_SIZE}px`;
+                div.innerHTML = '<i class="fas fa-plus"></i>';
+                
+                div.addEventListener('click', () => {
+                    startPlacementVoice(slot.gridX, slot.gridY, state.selectedItem, slot.refObj, slot.direction);
+                });
+                ui.slotLayer.appendChild(div);
+            });
+        }
+
+        // 文章（～ is by ～.）をルールに従って生成する
+        function getTargetPhrase(targetWord, refWord) {
+            const formatWord = (w) => w === 'house' ? 'my house' : `the ${w}`;
+            const target = formatWord(targetWord);
+            const ref = formatWord(refWord);
+            const sentence = `${target} is by ${ref}.`;
+            return sentence.charAt(0).toUpperCase() + sentence.slice(1);
+        }
+
+        function renderObjects() {
+            ui.objectLayer.innerHTML = '';
+            state.placedObjects.forEach(obj => {
+                const div = document.createElement('div');
+                div.className = 'town-object';
+                div.style.left = `${CENTER_COORD + obj.gridX * GRID_SIZE}px`;
+                div.style.top = `${CENTER_COORD + obj.gridY * GRID_SIZE}px`;
+                
+                div.innerHTML = `
+                    <div class="town-object-icon">${obj.icon}</div>
+                    <div class="town-object-label">${obj.word}</div>
+                `;
+                ui.objectLayer.appendChild(div);
+            });
+        }
+
+        function updateRuleIndicator() {
+            const len = state.placedObjects.length;
+            if (len === 0) {
+                ui.ruleText.textContent = "まずは「house」を置こう";
+            } else {
+                const isHorizontal = len % 2 === 1;
+                ui.ruleText.textContent = isHorizontal ? "次は 左右(よこ) に置けるよ" : "次は 上下(たて) に置けるよ";
+            }
+            
+            // 進捗表示更新 (10個で1サイクル)
+            const countForMiniGame = len % 10 === 0 && len > 0 ? 10 : len % 10;
+            ui.buildingCount.textContent = countForMiniGame;
+        }
+
+        function startPlacementVoice(gridX, gridY, item, refObj, direction) {
+            state.pendingPlacement = { gridX, gridY, item, refObj, phrase: "" };
+            
+            // 最初の一つ目、または上下配置の場合は音声入力をスキップして即配置
+            if (direction === 'first' || direction === 'vertical') {
+                executePlacement();
+                return;
+            }
+            
+            // 左右配置の場合は音声モーダルを開く
+            state.voiceMode = 'placement';
+            ui.modalTitle.innerHTML = "英語で言ってみよう！";
+            ui.kummaniImage.style.display = "none";
+            ui.modalIcons.innerHTML = `${item.icon} 👉 ${refObj.icon}`;
+            
+            const targetPhrase = getTargetPhrase(item.word, refObj.word);
+            state.pendingPlacement.phrase = targetPhrase;
+            
+            // UI表示用に色付け（The hospital is by my house.）
+            // 最初の単語(The xxx / My house)と、byの後の単語(the xxx / my house)に色をつける
+            const parts = targetPhrase.split(' is by ');
+            if(parts.length === 2) {
+                ui.modalPhrase.innerHTML = `<span class="text-blue-600">${parts[0]}</span> is by <span class="text-green-600">${parts[1].replace('.','')}</span>.`;
+            } else {
+                ui.modalPhrase.innerHTML = targetPhrase;
+            }
+            
+            openVoiceModal();
+        }
+
+        function executePlacement() {
+            const { gridX, gridY, item, phrase } = state.pendingPlacement;
+            
+            // 音声入力した文章（左右配置の時）のみ記録
+            if (phrase) {
+                state.recordedSentences.push(phrase);
+            }
+
+            state.placedObjects.push({
+                id: Date.now(), gridX, gridY, word: item.word, icon: item.icon
+            });
+            
+            renderObjects();
+            createConfetti(CENTER_COORD + gridX * GRID_SIZE, CENTER_COORD + gridY * GRID_SIZE);
+            
+            state.selectedItem = null;
+            updatePaletteUI();
+            updateRuleIndicator();
+            calculateSlots(); 
+            
+            const len = state.placedObjects.length;
+            
+            // 10個ごとに3Dミニゲーム
+            if (len > 1 && len % 10 === 0) {
+                setTimeout(start3DMiniGame, 1500);
+            } 
+            // 5個ごと(10の倍数以外)にクッマーニイベント
+            else if (len > 1 && len % 5 === 0) {
+                setTimeout(startKummaniEvent, 1000);
+            }
+        }
+
+        function startKummaniEvent() {
+            const targetObj = state.placedObjects[Math.floor(Math.random() * state.placedObjects.length)];
+            const refs = state.placedObjects.filter(obj => 
+                (Math.abs(obj.gridX - targetObj.gridX) === 1 && obj.gridY === targetObj.gridY) ||
+                (Math.abs(obj.gridY - targetObj.gridY) === 1 && obj.gridX === targetObj.gridX)
+            );
+            if (refs.length === 0) return; 
+            const refObj = refs[Math.floor(Math.random() * refs.length)];
+            
+            state.kummaniData = { targetObj, refObj };
+            state.voiceMode = 'kummani';
+            
+            const formatWord = (w) => w === 'house' ? 'my house' : `the ${w}`;
+            const questionTarget = formatWord(targetObj.word);
+            
+            ui.modalTitle.innerHTML = `クッマーニの質問！<br><span class="text-xl">「Where is ${questionTarget}?」</span>`;
+            ui.kummaniImage.style.display = "block";
+            ui.modalIcons.innerHTML = `${targetObj.icon} ❓`;
+            
+            const targetPhrase = getTargetPhrase(targetObj.word, refObj.word);
+            state.kummaniData.phrase = targetPhrase;
+            
+            const parts = targetPhrase.split(' is by ');
+            if(parts.length === 2) {
+                ui.modalPhrase.innerHTML = `<span class="text-blue-600">${parts[0]}</span> is by <span class="text-green-600">${parts[1].replace('.','')}</span>.`;
+            } else {
+                ui.modalPhrase.innerHTML = targetPhrase;
+            }
+            
+            openVoiceModal();
+        }
+
+        function setupSpeechRecognition() {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SpeechRecognition) return;
+
+            state.recognition = new SpeechRecognition();
+            state.recognition.lang = 'en-US';
+            state.recognition.interimResults = false;
+            state.recognition.maxAlternatives = 3;
+
+            state.recognition.onstart = function() {
+                ui.micBtn.classList.add('listening');
+                ui.voiceStatus.textContent = "聞いています...";
+                ui.voiceStatus.className = "text-blue-600 font-bold mb-4 h-8 animate-pulse text-lg";
+            };
+
+            state.recognition.onresult = function(event) {
+                ui.micBtn.classList.remove('listening');
+                let transcript = event.results && event.results[0] && event.results[0][0] ? event.results[0][0].transcript : "";
+                processSpeechResult(transcript);
+            };
+
+            state.recognition.onerror = function(event) {
+                if (event.error === 'not-allowed') {
+                    ui.micBtn.classList.remove('listening');
+                    ui.voiceStatus.textContent = "マイクが許可されていません。";
+                    ui.voiceStatus.className = "text-red-500 font-bold mb-4 h-8";
+                } else {
+                    ui.voiceStatus.textContent = "考え中...";
+                    ui.micBtn.classList.add('listening');
+                    state.fakeListenTimeout = setTimeout(() => {
+                        state.fakeListenTimeout = null;
+                        ui.micBtn.classList.remove('listening');
+                        handleVoiceFail("聞き取れませんでした");
+                    }, 5000);
+                }
+            };
+            
+            state.recognition.onend = function() {
+                if (state.fakeListenTimeout) return;
+                ui.micBtn.classList.remove('listening');
+                if(ui.voiceStatus.textContent === "聞いています..." || ui.voiceStatus.textContent === "考え中...") {
+                    ui.voiceStatus.textContent = "もう一度マイクを押してね";
+                    ui.voiceStatus.className = "text-gray-600 mb-4 h-8 font-bold";
+                }
+            };
+        }
+
+        function cleanPhrase(str) {
+            // 比較用に記号を消して小文字化
+            let s = str.toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
+            return s;
+        }
+
+        function processSpeechResult(transcript) {
+            const spokenClean = cleanPhrase(transcript);
+            let targetPhrase = "";
+            
+            if (state.voiceMode === 'placement') {
+                targetPhrase = state.pendingPlacement.phrase;
+            } else if (state.voiceMode === 'kummani') {
+                targetPhrase = state.kummaniData.phrase;
+            }
+            
+            const targetClean = cleanPhrase(targetPhrase);
+            
+            if (spokenClean.includes(targetClean) || targetClean.includes(spokenClean) && spokenClean.length > 5) {
+                handleVoiceSuccess();
+            } else {
+                handleVoiceFail(transcript);
+            }
+        }
+
+        function handleVoiceSuccess() {
+            ui.voiceStatus.textContent = "Excellent! ✨";
+            ui.voiceStatus.className = "text-green-500 font-bold text-2xl mb-4 h-8";
+            setTimeout(() => {
+                closeVoiceModal();
+                if (state.voiceMode === 'placement') executePlacement();
+                else if (state.voiceMode === 'kummani') showToast("クッマーニは大満足で帰っていったよ！🐻💨");
+            }, 1500);
+        }
+
+        function handleVoiceFail(heard) {
+            state.failCount++;
+            ui.failCountDisplay.textContent = state.failCount;
+            let displayHeard = (heard || "???").substring(0, 30);
+            ui.voiceStatus.innerHTML = `「${displayHeard}」と聞こえました<br>もう一度言ってみよう！`;
+            ui.voiceStatus.className = "text-orange-500 font-bold mb-4 h-12 text-sm";
+            if (state.failCount >= 3) ui.skipBtn.style.display = "block";
+        }
+
+        function toggleListening() {
+            if (!state.recognition || state.fakeListenTimeout) return;
+            try {
+                if (ui.micBtn.classList.contains('listening')) state.recognition.stop();
+                else state.recognition.start();
+            } catch (e) { console.error(e); }
+        }
+
+        function playSampleAudio() {
+            if (!('speechSynthesis' in window)) return;
+            window.speechSynthesis.cancel();
+            let phrase = "";
+            if (state.voiceMode === 'placement') phrase = state.pendingPlacement.phrase;
+            else if (state.voiceMode === 'kummani') phrase = state.kummaniData.phrase;
+            
+            const utterance = new SpeechSynthesisUtterance(phrase);
+            utterance.lang = 'en-US'; utterance.rate = 0.8;
+            window.speechSynthesis.speak(utterance);
+        }
+
+        function centerCameraOnHouse() {
+            // 最初の一つ目を中心に、ない場合は原点を中心とする
+            const houseObj = state.placedObjects[0];
+
+            const housePxX = CENTER_COORD + (houseObj ? houseObj.gridX * GRID_SIZE : 0);
+            const housePxY = CENTER_COORD + (houseObj ? houseObj.gridY * GRID_SIZE : 0);
+            
+            const halfW = ui.scrollContainer.clientWidth / 2;
+            const halfH = ui.scrollContainer.clientHeight / 2;
+            
+            ui.scrollContainer.scrollLeft = housePxX - halfW;
+            ui.scrollContainer.scrollTop = housePxY - halfH;
+        }
+
+        function setupDrag() {
+            let isDown = false;
+            let startX, startY, scrollLeft, scrollTop;
+            let mousedownX = 0, mousedownY = 0;
+
+            // マウス追従用のホバースロットを生成
+            const hoverSlot = document.createElement('div');
+            hoverSlot.className = 'placement-slot';
+            hoverSlot.style.display = 'none';
+            hoverSlot.style.pointerEvents = 'none';
+            hoverSlot.innerHTML = '<i class="fas fa-plus"></i>';
+            ui.worldContainer.appendChild(hoverSlot);
+
+            // ドラッグパン
+            ui.scrollContainer.addEventListener('mousedown', (e) => {
+                isDown = true;
+                startX = e.pageX - ui.scrollContainer.offsetLeft;
+                startY = e.pageY - ui.scrollContainer.offsetTop;
+                scrollLeft = ui.scrollContainer.scrollLeft;
+                scrollTop = ui.scrollContainer.scrollTop;
+                
+                mousedownX = e.pageX;
+                mousedownY = e.pageY;
+            });
+            window.addEventListener('mouseup', () => { isDown = false; });
+            
+            ui.scrollContainer.addEventListener('mousemove', (e) => {
+                if (!isDown) return;
+                e.preventDefault();
+                const x = e.pageX - ui.scrollContainer.offsetLeft;
+                const y = e.pageY - ui.scrollContainer.offsetTop;
+                const walkX = (x - startX) * 1.5;
+                const walkY = (y - startY) * 1.5;
+                ui.scrollContainer.scrollLeft = scrollLeft - walkX;
+                ui.scrollContainer.scrollTop = scrollTop - walkY;
+            });
+            
+            // 最初の一つ目を置くためのホバー＆クリック処理
+            ui.worldContainer.addEventListener('mousemove', (e) => {
+                if (state.placedObjects.length > 0 || !state.selectedItem || isDown) {
+                    hoverSlot.style.display = 'none';
+                    return;
+                }
+                
+                const rect = ui.worldContainer.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                
+                const gridX = Math.round((x - CENTER_COORD) / GRID_SIZE);
+                const gridY = Math.round((y - CENTER_COORD) / GRID_SIZE);
+                
+                hoverSlot.style.left = `${CENTER_COORD + gridX * GRID_SIZE}px`;
+                hoverSlot.style.top = `${CENTER_COORD + gridY * GRID_SIZE}px`;
+                hoverSlot.style.display = 'flex';
+            });
+            
+            ui.worldContainer.addEventListener('mouseleave', () => {
+                hoverSlot.style.display = 'none';
+            });
+
+            ui.worldContainer.addEventListener('click', (e) => {
+                if (state.placedObjects.length > 0) return; // 2個目以降は既存のスロットで置く
+                if (!state.selectedItem) return;
+                
+                // 画面をドラッグしていた場合はクリックとみなさない
+                const moveDist = Math.abs(e.pageX - mousedownX) + Math.abs(e.pageY - mousedownY);
+                if (moveDist > 10) return;
+
+                if (state.selectedItem.word !== 'house') {
+                    showToast("最初は「house」を選んでね！");
+                    return;
+                }
+
+                // クリックした場所のグリッド座標を計算して配置
+                const rect = ui.worldContainer.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                
+                const gridX = Math.round((x - CENTER_COORD) / GRID_SIZE);
+                const gridY = Math.round((y - CENTER_COORD) / GRID_SIZE);
+
+                hoverSlot.style.display = 'none';
+                startPlacementVoice(gridX, gridY, state.selectedItem, null, 'first');
+            });
+        }
+
+        function openVoiceModal() {
+            state.failCount = 0; ui.failCountDisplay.textContent = "0";
+            ui.skipBtn.style.display = "none";
+            ui.voiceStatus.textContent = "マイクボタンを押して話してね";
+            ui.voiceStatus.className = "text-gray-600 mb-4 h-8 font-bold flex items-center justify-center";
+            ui.voiceModal.style.display = 'flex';
+        }
+
+        function closeVoiceModal() {
+            ui.voiceModal.style.display = 'none';
+            if (state.fakeListenTimeout) { clearTimeout(state.fakeListenTimeout); state.fakeListenTimeout = null; }
+            if (state.recognition) { try { state.recognition.stop(); } catch(e){} }
+            ui.micBtn.classList.remove('listening');
+        }
+
+        function setupEventListeners() {
+            ui.micBtn.addEventListener('click', toggleListening);
+            ui.cancelVoice.addEventListener('click', closeVoiceModal);
+            ui.btnPlaySample.addEventListener('click', playSampleAudio);
+            
+            ui.skipBtn.addEventListener('click', () => {
+                closeVoiceModal();
+                if (state.voiceMode === 'placement') executePlacement();
+            });
+            
+            ui.btnUndo.addEventListener('click', () => {
+                if (state.placedObjects.length <= 1) { showToast("最初の家は消せません"); return; }
+                const popped = state.placedObjects.pop();
+                
+                // 上下配置じゃなくて音声入力していた場合は、履歴配列からも取り除く
+                // （簡易的に最後の要素を消す。今回は厳密な一致より数合わせ）
+                if (state.recordedSentences.length > 0) {
+                     state.recordedSentences.pop();
+                }
+
+                renderObjects(); updateRuleIndicator(); calculateSlots();
+            });
+            
+            ui.btnNewTown.addEventListener('click', () => {
+                if(confirm("新しい町を作りますか？")) resetTown();
+            });
+
+            // 最初の建物を自由な位置に置くためのイベント
+            ui.worldContainer.addEventListener('click', (e) => {
+                // すでに配置済みの場合は何もしない
+                if (state.placedObjects.length !== 0) return;
+                // パン（ドラッグ）操作の終わりのクリックなら無視
+                if (isDraggingMap) return;
+                if (!state.selectedItem) return;
+
+                if (state.selectedItem.word !== 'house') {
+                    showToast("最初は「house」を選んでね！");
+                    return;
+                }
+
+                // クリック座標からグリッドの位置を計算
+                const rect = ui.worldContainer.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                
+                const gridX = Math.round((x - CENTER_COORD) / GRID_SIZE);
+                const gridY = Math.round((y - CENTER_COORD) / GRID_SIZE);
+                
+                startPlacementVoice(gridX, gridY, state.selectedItem, null, 'first');
+            });
+
+            // ガチャイベント
+            document.getElementById('gacha-box').addEventListener('click', drawGacha);
+            document.getElementById('btn-close-gacha').addEventListener('click', () => {
+                document.getElementById('gacha-modal').style.display = 'none';
+            });
+            document.getElementById('btn-draw-again').addEventListener('click', () => {
+                showGachaArea();
+            });
+            
+            // ノートイベント
+            document.getElementById('btn-close-note').addEventListener('click', () => {
+                document.getElementById('note-modal').style.display = 'none';
+                showGachaModal(); // ノートが終わったらガチャ画面へ
+            });
+        }
+
+        let scene, camera, renderer, player, coins = [], npcs = [];
+        let animationId;
+        const keys = { w: false, a: false, s: false, d: false, up: false, down: false, left: false, right: false };
+
+        function createEmojiSprite(emoji, size=64) {
+            const canvas = document.createElement('canvas');
+            canvas.width = size; canvas.height = size;
+            const ctx = canvas.getContext('2d');
+            ctx.font = `${size*0.8}px Arial`;
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.fillText(emoji, size/2, size/2);
+            const texture = new THREE.CanvasTexture(canvas);
+            const material = new THREE.SpriteMaterial({ map: texture, transparent: true });
+            return new THREE.Sprite(material);
+        }
+
+        function spawnSingleCoin() {
+            const coinGeo = new THREE.CylinderGeometry(2, 2, 0.5, 16);
+            const coinMat = new THREE.MeshStandardMaterial({ color: 0xFFEA00, emissive: 0xFFD700, emissiveIntensity: 0.8, metalness: 0.8, roughness: 0.2 });
+            
+            const occupied = new Set();
+            state.placedObjects.forEach(obj => {
+                occupied.add(`${obj.gridX},${obj.gridY}`);
+            });
+            
+            let possibleSpaces = [];
+            state.placedObjects.forEach(obj => {
+                const dirs = [[1,0], [-1,0], [0,1], [0,-1]];
+                dirs.forEach(d => {
+                    const nx = obj.gridX + d[0];
+                    const ny = obj.gridY + d[1];
+                    if (!occupied.has(`${nx},${ny}`)) {
+                        possibleSpaces.push({x: nx, y: ny});
+                    }
+                });
+            });
+            
+            if (possibleSpaces.length > 0) {
+                const pos = possibleSpaces[Math.floor(Math.random() * possibleSpaces.length)];
+                const SCALE = 25;
+                const coin = new THREE.Mesh(coinGeo, coinMat);
+                coin.rotation.x = Math.PI / 2;
+                coin.position.set(pos.x * SCALE, 2, pos.y * SCALE);
+                scene.add(coin);
+                coins.push(coin);
+            }
+        }
+
+        function init3DScene() {
+            const container = document.getElementById('game-3d-container');
+            
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x87CEEB);
+            scene.fog = new THREE.Fog(0x87CEEB, 20, 200);
+
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 30, 40);
+            camera.lookAt(0, 0, 0);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            const oldCanvas = container.querySelector('canvas');
+            if(oldCanvas) container.removeChild(oldCanvas);
+            container.insertBefore(renderer.domElement, document.getElementById('game-ui'));
+
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
+            dirLight.position.set(10, 20, 10);
+            scene.add(dirLight);
+
+            // 街の中心と範囲を計算
+            let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+            state.placedObjects.forEach(obj => {
+                if (obj.gridX < minX) minX = obj.gridX;
+                if (obj.gridX > maxX) maxX = obj.gridX;
+                if (obj.gridY < minY) minY = obj.gridY;
+                if (obj.gridY > maxY) maxY = obj.gridY;
+            });
+            const centerX = minX === Infinity ? 0 : ((minX + maxX) / 2) * 25;
+            const centerZ = minY === Infinity ? 0 : ((minY + maxY) / 2) * 25;
+
+            // 地面とグリッドを広げて中心（建物のある場所）に配置
+            const gridHelper = new THREE.GridHelper(2000, 200, 0x000000, 0x000000);
+            gridHelper.material.opacity = 0.2; gridHelper.material.transparent = true;
+            gridHelper.position.set(centerX, 0, centerZ);
+            scene.add(gridHelper);
+            
+            const groundGeo = new THREE.PlaneGeometry(2000, 2000);
+            const groundMat = new THREE.MeshLambertMaterial({ color: 0x7CFC00 });
+            const ground = new THREE.Mesh(groundGeo, groundMat);
+            ground.rotation.x = -Math.PI / 2;
+            ground.position.set(centerX, 0, centerZ);
+            scene.add(ground);
+
+            // スケールを大きくして建物の間隔を広げる
+            const SCALE = 25;
+
+            // 建物の配置（白いブロックを削除し、絵文字のみに）
+            const occupied = new Set();
+            state.placedObjects.forEach(obj => {
+                const b3dx = obj.gridX * SCALE;
+                const b3dz = obj.gridY * SCALE;
+                occupied.add(`${obj.gridX},${obj.gridY}`);
+                
+                const iconSprite = createEmojiSprite(obj.icon, 128);
+                // 絵文字が地面に埋まらないように少し上げる
+                iconSprite.position.set(b3dx, 6, b3dz);
+                iconSprite.scale.set(12, 12, 1);
+                scene.add(iconSprite);
+            });
+
+            // プレイヤー（最初の家の位置をスタート地点にする）
+            const startX = state.placedObjects.length > 0 ? state.placedObjects[0].gridX * SCALE : 0;
+            const startZ = state.placedObjects.length > 0 ? state.placedObjects[0].gridY * SCALE : 0;
+
+            player = createEmojiSprite("🐻", 128);
+            player.position.set(startX, 4, startZ);
+            player.scale.set(8, 8, 1);
+            scene.add(player);
+
+            // コインの生成（建物の間に配置）
+            coins = [];
+            const emptySpaces = [];
+            state.placedObjects.forEach(obj => {
+                const dirs = [[1,0], [-1,0], [0,1], [0,-1]];
+                dirs.forEach(d => {
+                    const nx = obj.gridX + d[0];
+                    const ny = obj.gridY + d[1];
+                    if (!occupied.has(`${nx},${ny}`)) {
+                        emptySpaces.push({x: nx, y: ny});
+                        occupied.add(`${nx},${ny}`);
+                    }
+                });
+            });
+            
+            // 空きスペースに最大30個コインを配置
+            const coinGeo = new THREE.CylinderGeometry(2, 2, 0.5, 16);
+            const coinMat = new THREE.MeshStandardMaterial({ color: 0xFFEA00, emissive: 0xFFD700, emissiveIntensity: 0.8, metalness: 0.8, roughness: 0.2 });
+            
+            // ランダムに並び替え
+            emptySpaces.sort(() => 0.5 - Math.random());
+            const numCoins = Math.min(30, emptySpaces.length);
+            
+            for(let i=0; i<numCoins; i++) {
+                const pos = emptySpaces[i];
+                const coin = new THREE.Mesh(coinGeo, coinMat);
+                coin.rotation.x = Math.PI / 2;
+                coin.position.set(pos.x * SCALE, 2, pos.y * SCALE);
+                scene.add(coin);
+                coins.push(coin);
+            }
+
+            // お助けNPC
+            npcs = [];
+            state.gachaCharacters.forEach(char => {
+                const npc = createEmojiSprite(char.icon, 128);
+                // 初期位置はプレイヤーの周りにランダム
+                npc.position.set(startX + (Math.random() - 0.5) * 60, 4, startZ + (Math.random() - 0.5) * 60);
+                npc.scale.set(6, 6, 1);
+                scene.add(npc);
+                npcs.push(npc);
+            });
+
+            window.addEventListener('keydown', onKeyDown);
+            window.addEventListener('keyup', onKeyUp);
+            setupMobileControls();
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        function onKeyDown(e) {
+            switch(e.key.toLowerCase()) {
+                case 'w': case 'arrowup': keys.up = true; break;
+                case 's': case 'arrowdown': keys.down = true; break;
+                case 'a': case 'arrowleft': keys.left = true; break;
+                case 'd': case 'arrowright': keys.right = true; break;
+            }
+        }
+        function onKeyUp(e) {
+            switch(e.key.toLowerCase()) {
+                case 'w': case 'arrowup': keys.up = false; break;
+                case 's': case 'arrowdown': keys.down = false; break;
+                case 'a': case 'arrowleft': keys.left = false; break;
+                case 'd': case 'arrowright': keys.right = false; break;
+            }
+        }
+        
+        function setupMobileControls() {
+            const addBtnEvent = (id, key) => {
+                const btn = document.getElementById(id);
+                btn.addEventListener('touchstart', (e) => { e.preventDefault(); keys[key] = true; });
+                btn.addEventListener('touchend', (e) => { e.preventDefault(); keys[key] = false; });
+                btn.addEventListener('mousedown', () => keys[key] = true);
+                btn.addEventListener('mouseup', () => keys[key] = false);
+                btn.addEventListener('mouseleave', () => keys[key] = false);
+            };
+            addBtnEvent('btn-up', 'up');
+            addBtnEvent('btn-down', 'down');
+            addBtnEvent('btn-left', 'left');
+            addBtnEvent('btn-right', 'right');
+        }
+
+        function onWindowResize() {
+            if(!camera || !renderer) return;
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function start3DMiniGame() {
+            state.isGameRunning = true;
+            state.gameScore = 0;
+            document.getElementById('game-score').textContent = "0";
+            document.getElementById('game-timer').textContent = "20";
+            
+            document.getElementById('game-3d-container').style.display = 'block';
+            init3DScene();
+            
+            let timeLeft = 20;
+            const timerInterval = setInterval(() => {
+                timeLeft--;
+                document.getElementById('game-timer').textContent = timeLeft;
+                if (timeLeft <= 0) {
+                    clearInterval(timerInterval);
+                    end3DMiniGame();
+                }
+            }, 1000);
+
+            function animate() {
+                if (!state.isGameRunning) return;
+                animationId = requestAnimationFrame(animate);
+
+                // プレイヤー移動（スケールを大きくしたので速度も少し上げる）
+                const speed = 0.8;
+                if (keys.up) player.position.z -= speed;
+                if (keys.down) player.position.z += speed;
+                if (keys.left) player.position.x -= speed;
+                if (keys.right) player.position.x += speed;
+
+                // カメラ追従
+                camera.position.x = player.position.x;
+                camera.position.z = player.position.z + 40;
+                camera.lookAt(player.position.x, player.position.y, player.position.z);
+
+                // コイン回転と当たり判定
+                for (let i = coins.length - 1; i >= 0; i--) {
+                    const coin = coins[i];
+                    coin.rotation.z += 0.05;
+                    
+                    if (player.position.distanceTo(coin.position) < 6) {
+                        scene.remove(coin);
+                        coins.splice(i, 1);
+                        state.gameScore++;
+                        document.getElementById('game-score').textContent = state.gameScore;
+                        spawnSingleCoin();
+                    }
+                }
+
+                // NPC (ガチャキャラ)の移動
+                npcs.forEach(npc => {
+                    let closestCoin = null;
+                    let minDist = Infinity;
+                    coins.forEach(coin => {
+                        const dist = npc.position.distanceTo(coin.position);
+                        if (dist < minDist) {
+                            minDist = dist;
+                            closestCoin = coin;
+                        }
+                    });
+
+                    if (closestCoin) {
+                        const dir = new THREE.Vector3().subVectors(closestCoin.position, npc.position).normalize();
+                        npc.position.add(dir.multiplyScalar(0.4)); // プレイヤより遅め
+                        
+                        if (minDist < 5) {
+                            scene.remove(closestCoin);
+                            const index = coins.indexOf(closestCoin);
+                            if(index > -1) coins.splice(index, 1);
+                            state.gameScore++;
+                            document.getElementById('game-score').textContent = state.gameScore;
+                            spawnSingleCoin();
+                        }
+                    }
+                });
+
+                renderer.render(scene, camera);
+            }
+            animate();
+        }
+
+        function end3DMiniGame() {
+            state.isGameRunning = false;
+            cancelAnimationFrame(animationId);
+            window.removeEventListener('keydown', onKeyDown);
+            window.removeEventListener('keyup', onKeyUp);
+            
+            document.getElementById('game-3d-container').style.display = 'none';
+            if (renderer) renderer.dispose();
+            
+            // 初回（建物を10個置いた時）のみノートを表示
+            if (!state.hasShownNote && state.recordedSentences.length >= 2) {
+                state.hasShownNote = true;
+                showNoteModal();
+            } else {
+                showGachaModal();
+            }
+        }
+
+        // ノート画面の表示処理
+        function showNoteModal() {
+            const firstSentence = state.recordedSentences[0];
+            const lastSentence = state.recordedSentences[state.recordedSentences.length - 1];
+            
+            const ansData = [
+                { action: "さいしょに 置いた建物", en: firstSentence },
+                { action: "さいごに 置いた建物", en: lastSentence }
+            ];
+            
+            const container = document.getElementById('note-content-area');
+            container.innerHTML = '';
+            
+            ansData.forEach((ans, idx) => {
+                if(!ans.en) return;
+                
+                // My Town Builder用にプレフィックス等を簡略化
+                const html = `
+                    <div class="mb-10 min-w-max">
+                        <div class="text-gray-500 text-sm font-bold mb-1 inline-block px-2 rounded-t-lg relative z-10 bg-white/80">
+                            答え ${idx + 1}: ${ans.action}
+                        </div>
+                        <div class="four-lines-bg rounded-b-lg border-2 border-gray-200 shadow-sm flex min-w-max">
+                            <span class="font-note font-bold flex items-baseline flex-nowrap gap-2 px-4">
+                                <span class="text-teal-700">${ans.en}</span>
+                            </span>
+                        </div>
+                    </div>
+                `;
+                container.innerHTML += html;
+            });
+            
+            document.getElementById('note-modal').style.display = 'flex';
+        }
+
+        // ガチャ画面の表示処理
+        function showGachaModal() {
+            const modal = document.getElementById('gacha-modal');
+            document.getElementById('result-coins').textContent = state.gameScore;
+            
+            // コイン3枚につき1回ガチャ
+            state.gachaCount = Math.floor(state.gameScore / 3);
+            
+            showGachaArea();
+            modal.style.display = 'flex';
+        }
+
+        function showGachaArea() {
+            document.getElementById('gacha-count-display').textContent = state.gachaCount;
+            
+            if (state.gachaCount > 0) {
+                document.getElementById('gacha-area').style.display = 'block';
+                document.getElementById('gacha-box').style.animation = 'bounce 1s infinite';
+                document.getElementById('gacha-result').style.display = 'none';
+                document.getElementById('btn-close-gacha').style.display = 'none';
+            } else {
+                document.getElementById('gacha-area').style.display = 'none';
+                document.getElementById('gacha-result').style.display = 'none';
+                document.getElementById('btn-close-gacha').style.display = 'block';
+                document.getElementById('btn-close-gacha').textContent = "町づくりにもどる";
+            }
+        }
+
+        function drawGacha() {
+            if (state.gachaCount <= 0) return;
+            
+            state.gachaCount--;
+            document.getElementById('gacha-count-display').textContent = state.gachaCount;
+            
+            const box = document.getElementById('gacha-box');
+            box.style.animation = 'none';
+            
+            const randomChar = gachaCharactersList[Math.floor(Math.random() * gachaCharactersList.length)];
+            state.gachaCharacters.push(randomChar);
+            
+            document.getElementById('gacha-area').style.display = 'none';
+            
+            const resultDiv = document.getElementById('gacha-result');
+            document.getElementById('gacha-character-icon').textContent = randomChar.icon;
+            document.getElementById('gacha-character-name').textContent = randomChar.name;
+            resultDiv.style.display = 'block';
+            
+            // 残り回数に応じてボタンの表示を変える
+            if (state.gachaCount > 0) {
+                document.getElementById('btn-draw-again').style.display = 'block';
+                document.getElementById('btn-close-gacha').style.display = 'block';
+                document.getElementById('btn-close-gacha').textContent = "ガチャをやめて町へもどる";
+            } else {
+                document.getElementById('btn-draw-again').style.display = 'none';
+                document.getElementById('btn-close-gacha').style.display = 'block';
+                document.getElementById('btn-close-gacha').textContent = "町づくりにもどる";
+            }
+            
+            createConfetti(window.innerWidth / 2, window.innerHeight / 2);
+        }
+
+        function showToast(message) {
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            toast.style.opacity = '0';
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            setTimeout(() => { toast.style.opacity = '1'; }, 10);
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                setTimeout(() => toast.remove(), 500);
+            }, 3000);
+        }
+
+        function createConfetti(x, y) {
+            const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
+            const container = document.body;
+            
+            for (let i = 0; i < 20; i++) {
+                const particle = document.createElement('div');
+                particle.style.position = 'fixed';
+                particle.style.left = `${x}px`;
+                particle.style.top = `${y}px`;
+                particle.style.width = '12px';
+                particle.style.height = '12px';
+                particle.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+                particle.style.borderRadius = '50%';
+                particle.style.pointerEvents = 'none';
+                particle.style.zIndex = '1000';
+                
+                const angle = Math.random() * Math.PI * 2;
+                const velocity = 30 + Math.random() * 80;
+                const tx = Math.cos(angle) * velocity;
+                const ty = Math.sin(angle) * velocity - 40;
+                
+                particle.animate([
+                    { transform: 'translate(0, 0) scale(1)', opacity: 1 },
+                    { transform: `translate(${tx}px, ${ty}px) scale(0)`, opacity: 0 }
+                ], {
+                    duration: 600 + Math.random() * 400,
+                    easing: 'cubic-bezier(0, .9, .57, 1)'
+                });
+                
+                container.appendChild(particle);
+                setTimeout(() => particle.remove(), 1000);
+            }
+        }
+
+        window.onload = initApp;
+
+    </script>
+</body>
+</html>
