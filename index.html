@@ -297,6 +297,7 @@
         
         .custom-scrollbar::-webkit-scrollbar {
             height: 12px;
+            width: 12px;
         }
         .custom-scrollbar::-webkit-scrollbar-thumb {
             background-color: #cbd5e1;
@@ -432,7 +433,7 @@
 
     <!-- ガチャモーダル -->
     <div id="gacha-modal" class="modal-overlay" style="z-index: 300;">
-        <div class="modal-content border-4 border-yellow-400 bg-gradient-to-b from-white to-yellow-50 w-[500px]">
+        <div class="modal-content border-4 border-yellow-400 bg-gradient-to-b from-white to-yellow-50 w-[550px]">
             <h2 class="text-3xl font-bold mb-2 text-yellow-600">おつかれさま！</h2>
             <p class="text-lg font-bold text-gray-700 mb-4"><span id="result-coins" class="text-2xl text-yellow-500">0</span> 枚のコインを集めたよ！</p>
             
@@ -441,15 +442,28 @@
                 <p class="text-lg font-bold mt-1">のこりガチャ回数: <span id="gacha-count-display" class="text-2xl text-blue-600">0</span> 回</p>
             </div>
             
+            <!-- 複数回対応のガチャエリア -->
             <div id="gacha-area" class="my-6">
-                <div id="gacha-box" class="text-8xl cursor-pointer animate-bounce">🎁</div>
-                <p class="text-sm text-gray-500 mt-2 font-bold">タップしてガチャを引く！</p>
+                <div id="gacha-box" class="text-8xl cursor-pointer animate-bounce select-none">🎁</div>
+                <p class="text-sm text-gray-500 mt-2 font-bold mb-4">タップして1回ガチャを引くか、下から選ぼう！</p>
+                
+                <div class="flex flex-wrap justify-center gap-2 mt-4">
+                    <button id="btn-gacha-1" class="px-4 py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-bold shadow transition-colors w-24">1回</button>
+                    <button id="btn-gacha-10" class="px-4 py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-bold shadow transition-colors w-24">10回</button>
+                    <button id="btn-gacha-100" class="px-4 py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-bold shadow transition-colors w-24">100回</button>
+                    <button id="btn-gacha-1000" class="px-4 py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-bold shadow transition-colors w-24">1000回</button>
+                </div>
             </div>
 
+            <!-- ガチャ結果エリア -->
             <div id="gacha-result" class="hidden my-6">
                 <div class="text-2xl font-bold text-blue-600 mb-2">新しいなかまをゲット！</div>
-                <div id="gacha-character-icon" class="text-8xl filter drop-shadow-lg mb-2">✨</div>
-                <div id="gacha-character-name" class="text-xl font-bold text-gray-800 border-b-2 border-yellow-400 inline-block px-4">名前</div>
+                
+                <!-- 結果を並べるコンテナ -->
+                <div id="gacha-result-list" class="flex flex-wrap justify-center gap-3 max-h-64 overflow-y-auto custom-scrollbar p-2">
+                    <!-- 動的生成 -->
+                </div>
+                
                 <p class="text-sm text-gray-600 mt-4">次のミニゲームからコイン集めを手伝ってくれるよ！</p>
                 
                 <button id="btn-draw-again" class="mt-6 w-full py-3 bg-yellow-500 hover:bg-yellow-600 text-white font-bold rounded-lg transition-colors shadow-md hidden">
@@ -507,14 +521,14 @@
             kummaniData: null,
             failCount: 0,
             fakeListenTimeout: null,
-            recordedSentences: [], // 音声入力した文章を保存する配列
+            recordedSentences: [], 
 
             // ガチャ＆3Dゲーム・ノート関連
-            gachaCharacters: [], // 獲得済みキャラ
+            gachaCharacters: [], 
             gameScore: 0,
             isGameRunning: false,
-            hasShownNote: false, // 1回だけノートを表示するためのフラグ
-            gachaCount: 0 // 残りガチャ回数
+            hasShownNote: false, 
+            gachaCount: 0 
         };
 
         const ui = {
@@ -561,9 +575,7 @@
             calculateSlots();
             updateRuleIndicator();
             
-            // 初期中央寄せ
             setTimeout(centerCameraOnHouse, 100);
-            
             showToast("新しい町がはじまるよ！左から「house」を選んで、好きな場所をクリックしてね。");
         }
 
@@ -609,12 +621,10 @@
             ui.slotLayer.innerHTML = '';
             if (!state.selectedItem) return;
             
-            // 最初の1個目はマウスホバーで動的にスロットを出すためここでは生成しない
             if (state.placedObjects.length === 0) {
                 return;
             }
 
-            // 長さ1(奇数)なら左右、長さ2(偶数)なら上下
             const isHorizontal = state.placedObjects.length % 2 === 1; 
             const slotsData = [];
             
@@ -648,7 +658,6 @@
             });
         }
 
-        // 文章（～ is by ～.）をルールに従って生成する
         function getTargetPhrase(targetWord, refWord) {
             const formatWord = (w) => w === 'house' ? 'my house' : `the ${w}`;
             const target = formatWord(targetWord);
@@ -682,7 +691,6 @@
                 ui.ruleText.textContent = isHorizontal ? "次は 左右(よこ) に置けるよ" : "次は 上下(たて) に置けるよ";
             }
             
-            // 進捗表示更新 (10個で1サイクル)
             const countForMiniGame = len % 10 === 0 && len > 0 ? 10 : len % 10;
             ui.buildingCount.textContent = countForMiniGame;
         }
@@ -690,13 +698,11 @@
         function startPlacementVoice(gridX, gridY, item, refObj, direction) {
             state.pendingPlacement = { gridX, gridY, item, refObj, phrase: "" };
             
-            // 最初の一つ目、または上下配置の場合は音声入力をスキップして即配置
             if (direction === 'first' || direction === 'vertical') {
                 executePlacement();
                 return;
             }
             
-            // 左右配置の場合は音声モーダルを開く
             state.voiceMode = 'placement';
             ui.modalTitle.innerHTML = "英語で言ってみよう！";
             ui.kummaniImage.style.display = "none";
@@ -705,8 +711,6 @@
             const targetPhrase = getTargetPhrase(item.word, refObj.word);
             state.pendingPlacement.phrase = targetPhrase;
             
-            // UI表示用に色付け（The hospital is by my house.）
-            // 最初の単語(The xxx / My house)と、byの後の単語(the xxx / my house)に色をつける
             const parts = targetPhrase.split(' is by ');
             if(parts.length === 2) {
                 ui.modalPhrase.innerHTML = `<span class="text-blue-600">${parts[0]}</span> is by <span class="text-green-600">${parts[1].replace('.','')}</span>.`;
@@ -720,7 +724,6 @@
         function executePlacement() {
             const { gridX, gridY, item, phrase } = state.pendingPlacement;
             
-            // 音声入力した文章（左右配置の時）のみ記録
             if (phrase) {
                 state.recordedSentences.push(phrase);
             }
@@ -739,11 +742,9 @@
             
             const len = state.placedObjects.length;
             
-            // 10個ごとに3Dミニゲーム
             if (len > 1 && len % 10 === 0) {
                 setTimeout(start3DMiniGame, 1500);
             } 
-            // 5個ごと(10の倍数以外)にクッマーニイベント
             else if (len > 1 && len % 5 === 0) {
                 setTimeout(startKummaniEvent, 1000);
             }
@@ -829,7 +830,6 @@
         }
 
         function cleanPhrase(str) {
-            // 比較用に記号を消して小文字化
             let s = str.toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
             return s;
         }
@@ -893,9 +893,7 @@
         }
 
         function centerCameraOnHouse() {
-            // 最初の一つ目を中心に、ない場合は原点を中心とする
             const houseObj = state.placedObjects[0];
-
             const housePxX = CENTER_COORD + (houseObj ? houseObj.gridX * GRID_SIZE : 0);
             const housePxY = CENTER_COORD + (houseObj ? houseObj.gridY * GRID_SIZE : 0);
             
@@ -911,7 +909,6 @@
             let startX, startY, scrollLeft, scrollTop;
             let mousedownX = 0, mousedownY = 0;
 
-            // マウス追従用のホバースロットを生成
             const hoverSlot = document.createElement('div');
             hoverSlot.className = 'placement-slot';
             hoverSlot.style.display = 'none';
@@ -919,7 +916,6 @@
             hoverSlot.innerHTML = '<i class="fas fa-plus"></i>';
             ui.worldContainer.appendChild(hoverSlot);
 
-            // ドラッグパン
             ui.scrollContainer.addEventListener('mousedown', (e) => {
                 isDown = true;
                 startX = e.pageX - ui.scrollContainer.offsetLeft;
@@ -943,7 +939,6 @@
                 ui.scrollContainer.scrollTop = scrollTop - walkY;
             });
             
-            // 最初の一つ目を置くためのホバー＆クリック処理
             ui.worldContainer.addEventListener('mousemove', (e) => {
                 if (state.placedObjects.length > 0 || !state.selectedItem || isDown) {
                     hoverSlot.style.display = 'none';
@@ -967,10 +962,9 @@
             });
 
             ui.worldContainer.addEventListener('click', (e) => {
-                if (state.placedObjects.length > 0) return; // 2個目以降は既存のスロットで置く
+                if (state.placedObjects.length > 0) return; 
                 if (!state.selectedItem) return;
                 
-                // 画面をドラッグしていた場合はクリックとみなさない
                 const moveDist = Math.abs(e.pageX - mousedownX) + Math.abs(e.pageY - mousedownY);
                 if (moveDist > 10) return;
 
@@ -979,7 +973,6 @@
                     return;
                 }
 
-                // クリックした場所のグリッド座標を計算して配置
                 const rect = ui.worldContainer.getBoundingClientRect();
                 const x = e.clientX - rect.left;
                 const y = e.clientY - rect.top;
@@ -1021,8 +1014,6 @@
                 if (state.placedObjects.length <= 1) { showToast("最初の家は消せません"); return; }
                 const popped = state.placedObjects.pop();
                 
-                // 上下配置じゃなくて音声入力していた場合は、履歴配列からも取り除く
-                // （簡易的に最後の要素を消す。今回は厳密な一致より数合わせ）
                 if (state.recordedSentences.length > 0) {
                      state.recordedSentences.pop();
                 }
@@ -1034,32 +1025,15 @@
                 if(confirm("新しい町を作りますか？")) resetTown();
             });
 
-            // 最初の建物を自由な位置に置くためのイベント
-            ui.worldContainer.addEventListener('click', (e) => {
-                // すでに配置済みの場合は何もしない
-                if (state.placedObjects.length !== 0) return;
-                // パン（ドラッグ）操作の終わりのクリックなら無視
-                if (isDraggingMap) return;
-                if (!state.selectedItem) return;
-
-                if (state.selectedItem.word !== 'house') {
-                    showToast("最初は「house」を選んでね！");
-                    return;
-                }
-
-                // クリック座標からグリッドの位置を計算
-                const rect = ui.worldContainer.getBoundingClientRect();
-                const x = e.clientX - rect.left;
-                const y = e.clientY - rect.top;
-                
-                const gridX = Math.round((x - CENTER_COORD) / GRID_SIZE);
-                const gridY = Math.round((y - CENTER_COORD) / GRID_SIZE);
-                
-                startPlacementVoice(gridX, gridY, state.selectedItem, null, 'first');
-            });
-
-            // ガチャイベント
-            document.getElementById('gacha-box').addEventListener('click', drawGacha);
+            // まとめてガチャを引くイベント
+            document.getElementById('btn-gacha-1').addEventListener('click', () => drawGachaMultiple(1));
+            document.getElementById('btn-gacha-10').addEventListener('click', () => drawGachaMultiple(10));
+            document.getElementById('btn-gacha-100').addEventListener('click', () => drawGachaMultiple(100));
+            document.getElementById('btn-gacha-1000').addEventListener('click', () => drawGachaMultiple(1000));
+            
+            // 🎁タップでも1回引く
+            document.getElementById('gacha-box').addEventListener('click', () => drawGachaMultiple(1));
+            
             document.getElementById('btn-close-gacha').addEventListener('click', () => {
                 document.getElementById('gacha-modal').style.display = 'none';
             });
@@ -1067,10 +1041,9 @@
                 showGachaArea();
             });
             
-            // ノートイベント
             document.getElementById('btn-close-note').addEventListener('click', () => {
                 document.getElementById('note-modal').style.display = 'none';
-                showGachaModal(); // ノートが終わったらガチャ画面へ
+                showGachaModal(); 
             });
         }
 
@@ -1145,7 +1118,6 @@
             dirLight.position.set(10, 20, 10);
             scene.add(dirLight);
 
-            // 街の中心と範囲を計算
             let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
             state.placedObjects.forEach(obj => {
                 if (obj.gridX < minX) minX = obj.gridX;
@@ -1156,7 +1128,6 @@
             const centerX = minX === Infinity ? 0 : ((minX + maxX) / 2) * 25;
             const centerZ = minY === Infinity ? 0 : ((minY + maxY) / 2) * 25;
 
-            // 地面とグリッドを広げて中心（建物のある場所）に配置
             const gridHelper = new THREE.GridHelper(2000, 200, 0x000000, 0x000000);
             gridHelper.material.opacity = 0.2; gridHelper.material.transparent = true;
             gridHelper.position.set(centerX, 0, centerZ);
@@ -1169,10 +1140,8 @@
             ground.position.set(centerX, 0, centerZ);
             scene.add(ground);
 
-            // スケールを大きくして建物の間隔を広げる
             const SCALE = 25;
 
-            // 建物の配置（白いブロックを削除し、絵文字のみに）
             const occupied = new Set();
             state.placedObjects.forEach(obj => {
                 const b3dx = obj.gridX * SCALE;
@@ -1180,13 +1149,11 @@
                 occupied.add(`${obj.gridX},${obj.gridY}`);
                 
                 const iconSprite = createEmojiSprite(obj.icon, 128);
-                // 絵文字が地面に埋まらないように少し上げる
                 iconSprite.position.set(b3dx, 6, b3dz);
                 iconSprite.scale.set(12, 12, 1);
                 scene.add(iconSprite);
             });
 
-            // プレイヤー（最初の家の位置をスタート地点にする）
             const startX = state.placedObjects.length > 0 ? state.placedObjects[0].gridX * SCALE : 0;
             const startZ = state.placedObjects.length > 0 ? state.placedObjects[0].gridY * SCALE : 0;
 
@@ -1195,7 +1162,6 @@
             player.scale.set(8, 8, 1);
             scene.add(player);
 
-            // コインの生成（建物の間に配置）
             coins = [];
             const emptySpaces = [];
             state.placedObjects.forEach(obj => {
@@ -1210,11 +1176,9 @@
                 });
             });
             
-            // 空きスペースに最大30個コインを配置
             const coinGeo = new THREE.CylinderGeometry(2, 2, 0.5, 16);
             const coinMat = new THREE.MeshStandardMaterial({ color: 0xFFEA00, emissive: 0xFFD700, emissiveIntensity: 0.8, metalness: 0.8, roughness: 0.2 });
             
-            // ランダムに並び替え
             emptySpaces.sort(() => 0.5 - Math.random());
             const numCoins = Math.min(30, emptySpaces.length);
             
@@ -1227,11 +1191,9 @@
                 coins.push(coin);
             }
 
-            // お助けNPC
             npcs = [];
             state.gachaCharacters.forEach(char => {
                 const npc = createEmojiSprite(char.icon, 128);
-                // 初期位置はプレイヤーの周りにランダム
                 npc.position.set(startX + (Math.random() - 0.5) * 60, 4, startZ + (Math.random() - 0.5) * 60);
                 npc.scale.set(6, 6, 1);
                 scene.add(npc);
@@ -1306,19 +1268,16 @@
                 if (!state.isGameRunning) return;
                 animationId = requestAnimationFrame(animate);
 
-                // プレイヤー移動（スケールを大きくしたので速度も少し上げる）
                 const speed = 0.8;
                 if (keys.up) player.position.z -= speed;
                 if (keys.down) player.position.z += speed;
                 if (keys.left) player.position.x -= speed;
                 if (keys.right) player.position.x += speed;
 
-                // カメラ追従
                 camera.position.x = player.position.x;
                 camera.position.z = player.position.z + 40;
                 camera.lookAt(player.position.x, player.position.y, player.position.z);
 
-                // コイン回転と当たり判定
                 for (let i = coins.length - 1; i >= 0; i--) {
                     const coin = coins[i];
                     coin.rotation.z += 0.05;
@@ -1332,7 +1291,6 @@
                     }
                 }
 
-                // NPC (ガチャキャラ)の移動
                 npcs.forEach(npc => {
                     let closestCoin = null;
                     let minDist = Infinity;
@@ -1346,7 +1304,7 @@
 
                     if (closestCoin) {
                         const dir = new THREE.Vector3().subVectors(closestCoin.position, npc.position).normalize();
-                        npc.position.add(dir.multiplyScalar(0.4)); // プレイヤより遅め
+                        npc.position.add(dir.multiplyScalar(0.4)); 
                         
                         if (minDist < 5) {
                             scene.remove(closestCoin);
@@ -1373,7 +1331,6 @@
             document.getElementById('game-3d-container').style.display = 'none';
             if (renderer) renderer.dispose();
             
-            // 初回（建物を10個置いた時）のみノートを表示
             if (!state.hasShownNote && state.recordedSentences.length >= 2) {
                 state.hasShownNote = true;
                 showNoteModal();
@@ -1382,7 +1339,6 @@
             }
         }
 
-        // ノート画面の表示処理
         function showNoteModal() {
             const firstSentence = state.recordedSentences[0];
             const lastSentence = state.recordedSentences[state.recordedSentences.length - 1];
@@ -1398,7 +1354,6 @@
             ansData.forEach((ans, idx) => {
                 if(!ans.en) return;
                 
-                // My Town Builder用にプレフィックス等を簡略化
                 const html = `
                     <div class="mb-10 min-w-max">
                         <div class="text-gray-500 text-sm font-bold mb-1 inline-block px-2 rounded-t-lg relative z-10 bg-white/80">
@@ -1417,12 +1372,10 @@
             document.getElementById('note-modal').style.display = 'flex';
         }
 
-        // ガチャ画面の表示処理
         function showGachaModal() {
             const modal = document.getElementById('gacha-modal');
             document.getElementById('result-coins').textContent = state.gameScore;
             
-            // コイン3枚につき1回ガチャ
             state.gachaCount = Math.floor(state.gameScore / 3);
             
             showGachaArea();
@@ -1437,6 +1390,21 @@
                 document.getElementById('gacha-box').style.animation = 'bounce 1s infinite';
                 document.getElementById('gacha-result').style.display = 'none';
                 document.getElementById('btn-close-gacha').style.display = 'none';
+
+                // ボタンの有効/無効を切り替え
+                ['1', '10', '100', '1000'].forEach(num => {
+                    const btn = document.getElementById(`btn-gacha-${num}`);
+                    if(state.gachaCount < parseInt(num)) {
+                        btn.disabled = true;
+                        btn.classList.add('opacity-50', 'cursor-not-allowed');
+                        btn.classList.remove('hover:bg-blue-600');
+                    } else {
+                        btn.disabled = false;
+                        btn.classList.remove('opacity-50', 'cursor-not-allowed');
+                        btn.classList.add('hover:bg-blue-600');
+                    }
+                });
+
             } else {
                 document.getElementById('gacha-area').style.display = 'none';
                 document.getElementById('gacha-result').style.display = 'none';
@@ -1445,26 +1413,59 @@
             }
         }
 
-        function drawGacha() {
+        function drawGachaMultiple(times) {
             if (state.gachaCount <= 0) return;
             
-            state.gachaCount--;
+            // 念のため、引ける最大回数に制限
+            const actualTimes = Math.min(times, state.gachaCount);
+            
+            state.gachaCount -= actualTimes;
             document.getElementById('gacha-count-display').textContent = state.gachaCount;
             
             const box = document.getElementById('gacha-box');
             box.style.animation = 'none';
             
-            const randomChar = gachaCharactersList[Math.floor(Math.random() * gachaCharactersList.length)];
-            state.gachaCharacters.push(randomChar);
+            // 獲得したキャラを集計
+            const results = {};
+            for (let i = 0; i < actualTimes; i++) {
+                const randomChar = gachaCharactersList[Math.floor(Math.random() * gachaCharactersList.length)];
+                state.gachaCharacters.push(randomChar);
+                if (!results[randomChar.name]) {
+                    results[randomChar.name] = { char: randomChar, count: 0 };
+                }
+                results[randomChar.name].count++;
+            }
             
             document.getElementById('gacha-area').style.display = 'none';
             
             const resultDiv = document.getElementById('gacha-result');
-            document.getElementById('gacha-character-icon').textContent = randomChar.icon;
-            document.getElementById('gacha-character-name').textContent = randomChar.name;
+            const resultList = document.getElementById('gacha-result-list');
+            resultList.innerHTML = '';
+
+            // 1回の場合と複数回の場合で見た目を少し変える
+            if (actualTimes === 1) {
+                const charName = Object.keys(results)[0];
+                const char = results[charName].char;
+                resultList.innerHTML = `
+                    <div class="flex flex-col items-center">
+                        <div class="text-8xl filter drop-shadow-lg mb-2">${char.icon}</div>
+                        <div class="text-xl font-bold text-gray-800 border-b-2 border-yellow-400 px-4">${char.name}</div>
+                    </div>
+                `;
+            } else {
+                Object.values(results).forEach(res => {
+                    resultList.innerHTML += `
+                        <div class="flex flex-col items-center p-3 border-2 border-yellow-200 rounded-xl bg-yellow-50 min-w-[90px] shadow-sm">
+                            <div class="text-5xl filter drop-shadow-md mb-2">${res.char.icon}</div>
+                            <div class="text-sm font-bold text-gray-800">${res.char.name}</div>
+                            <div class="text-lg font-black text-blue-600 mt-1">x${res.count}</div>
+                        </div>
+                    `;
+                });
+            }
+
             resultDiv.style.display = 'block';
             
-            // 残り回数に応じてボタンの表示を変える
             if (state.gachaCount > 0) {
                 document.getElementById('btn-draw-again').style.display = 'block';
                 document.getElementById('btn-close-gacha').style.display = 'block';
